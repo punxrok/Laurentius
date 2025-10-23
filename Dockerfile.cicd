@@ -54,8 +54,14 @@ COPY --from=build /app/scripts/install/laurentius-home/  $WILDFLY_HOME/standalon
 COPY --from=build /app/scripts/install/$SERVER_VERSION/laurentius-init.sh  $WILDFLY_HOME/bin/laurentius-demo.sh
 COPY --from=build /app/scripts/install/$SERVER_VERSION/laurentius.sh       $WILDFLY_HOME/bin/laurentius.sh
 
+# copy entrypoint wrapper (first-run init) if present in build context
+COPY --from=build /app/scripts/install/$SERVER_VERSION/laurentius-entrypoint.sh $WILDFLY_HOME/bin/laurentius-entrypoint.sh
+
+# COPY --from=build /app/scripts/install/$SERVER_VERSION/laurentius-entrypoint.sh /tmp/laurentius-entrypoint.sh
+# RUN if [ -f /tmp/laurentius-entrypoint.sh ]; then mv /tmp/laurentius-entrypoint.sh $WILDFLY_HOME/bin/laurentius-entrypoint.sh; fi
+
 USER root
-# safety: remove BOM, strip CRLF, ensure +x, normalize module.xml, replace VERSION token, and set ownership so jboss can read module jars
+# safety: remove BOM, strip CRLF, ensure +x, normalize module.xml, replace VERSION token, and set ownership so jboss can read module jars and logs
 RUN set -eux; \
     # normalize shell scripts: remove BOM if present, strip CRLF, ensure executable
     for f in $WILDFLY_HOME/bin/*.sh; do \
@@ -65,7 +71,7 @@ RUN set -eux; \
         chmod +x "$f" || true; \
       fi; \
     done; \
-    # normalize module.xml: remove BOM, strip CR, replace VERSION
+    # normalize module.xml: remove BOM, strip CR, replace VERSION token
     if [ -f "$WILDFLY_HOME/modules/si/laurentius/main/module.xml" ]; then \
       awk 'NR==1{sub(/^\xef\xbb\xbf/,"")}1' "$WILDFLY_HOME/modules/si/laurentius/main/module.xml" > "$WILDFLY_HOME/modules/si/laurentius/main/module.xml.tmp" || true; \
       mv "$WILDFLY_HOME/modules/si/laurentius/main/module.xml.tmp" "$WILDFLY_HOME/modules/si/laurentius/main/module.xml" 2>/dev/null || true; \
@@ -77,10 +83,19 @@ RUN set -eux; \
       chown -R jboss:jboss "$WILDFLY_HOME/modules/si/laurentius/main" || true; \
       chmod -R a+r "$WILDFLY_HOME/modules/si/laurentius/main" || true; \
     fi; \
-    # set ownership for standalone data dir as well
-    chown -R jboss:jboss $WILDFLY_HOME/standalone/data || true; \
+    # ensure standalone data and log directories exist and are writable by jboss
+    mkdir -p "$WILDFLY_HOME/standalone/data" "$WILDFLY_HOME/standalone/log"; \
+    chown -R jboss:jboss "$WILDFLY_HOME/standalone/data" "$WILDFLY_HOME/standalone/log" || true; \
+    chmod -R a+rwX "$WILDFLY_HOME/standalone/log" || true; \
     true
 
+# ensure entrypoint script is executable if it was added
+USER root
+RUN if [ -f "$WILDFLY_HOME/bin/laurentius-entrypoint.sh" ]; then chmod +x "$WILDFLY_HOME/bin/laurentius-entrypoint.sh" || true; fi
 USER jboss
 
-CMD ["/opt/jboss/wildfly/bin/laurentius-demo.sh","--init","-d","court-laurentius.si"]
+# Use entrypoint wrapper if present, otherwise fall back to laurentius-demo.sh
+ENTRYPOINT ["/opt/jboss/wildfly/bin/laurentius-entrypoint.sh"]
+CMD ["-d","court-laurentius.si"]
+# If you prefer the old behavior (explicit --init by default), use:
+# CMD ["/opt/jboss/wildfly/bin/laurentius-demo.sh","--init","-d","court-laurentius.si"]

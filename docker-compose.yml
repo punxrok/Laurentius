@@ -19,12 +19,13 @@ services:
     environment:
       LAU_DOMAIN: 'court-laurentius.si'
       LAU_AUTO_ACCEPT: 'true'
-      
-    healthcheck:
-      test: ["CMD-SHELL","curl -f http://localhost:8080/ || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
+      LAU_AUTO_INIT: 'true'
+
+    # healthcheck:
+    #   test: ["CMD-SHELL","curl -f http://localhost:8080/ || exit 1"]
+    #   interval: 30s
+    #   timeout: 5s
+    #   retries: 5
     # do NOT override the command here; let the image CMD run the init script
     # either remove the command to use the image default, or point it to the correct path:
     # command: ["/opt/jboss/wildfly/bin/laurentius-demo.sh","--init","-d","court-laurentius.si"]
