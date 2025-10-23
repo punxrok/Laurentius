@@ -17,3 +17,4 @@ cp ../Laurentius-app/Laurentius-web/target/laurentius-web.war $FOLDER_DEPLOY/$WI
 cd "$FOLDER_DEPLOY/$WILDFLY_HOME/bin"
 
 ./laurentius-init.sh --init -d mb-laurentius.si
+

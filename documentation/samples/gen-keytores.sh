@@ -56,3 +56,4 @@ echo "org.apache.ws.security.crypto.merlin.keystore.file=keystore/msh.e-box-b-tr
 echo "msh.e-box-a.si=key1234"  > msh_key-passwords.properties
 echo "msh.e-box-b.si=key1234" >> msh_key-passwords.properties
 
+

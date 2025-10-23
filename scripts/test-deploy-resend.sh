@@ -15,3 +15,4 @@ cp "/sluzba/code/e-vlozisce/trunk/04 Implementacija/e-vlozisce-code/laurentius-p
 cd "$FOLDER_DEPLOY/$WILDFLY_HOME/bin"
 
 ./laurentius-demo.sh --init -d mb-laurentius.si
+

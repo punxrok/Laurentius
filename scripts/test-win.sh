@@ -4,3 +4,4 @@ echo "JAVA_HOME=$JAVA_HOME"
 export WINEDEBUG=1
 #wine cmd test-deploy.bat
 wineconsole test-deploy.bat
+

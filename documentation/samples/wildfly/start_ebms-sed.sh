@@ -30,3 +30,4 @@ cp "/Laurentius/Laurentius-dao/target/Laurentius-dao.jar" ../standalone/deployme
 ./standalone.sh -c standalone-ebms.xml -Dlaurentius.home=/opt/servers/wildfly-10.0.0.Final/laurentius.home -Dsi.laurentius.msh.hibernate.hbm2ddl.auto=create -Dsi.laurentius.msh.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect -Dsi.laurentius.msh.sender.workers.count=7
 
 
+

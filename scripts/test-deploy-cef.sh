@@ -17,3 +17,4 @@ cp ../../plugins/Laurentius-cef-plugin/target/plugin-cef.war $FOLDER_DEPLOY/$WIL
 cd "$FOLDER_DEPLOY/$WILDFLY_HOME/bin"
 
 ./laurentius-demo.sh --init -d mb-laurentius.si
+

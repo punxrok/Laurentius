@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  laurentius:
+    build:
+      context: .
+      dockerfile: Dockerfile.cicd
+    image: laurentius:develop
+    container_name: laurentius
+    restart: unless-stopped
+    ports:
+      - '8080:8080'
+      - '8443:8443'
+      - '9990:9990'
+    volumes:
+      # use named volumes so container-owned files have correct ownership/permissions
+      - laurentius-data:/opt/jboss/wildfly/standalone/data/laurentius-home
+      - laurentius-logs:/opt/jboss/wildfly/standalone/log
+    environment:
+      LAU_DOMAIN: 'court-laurentius.si'
+      LAU_AUTO_ACCEPT: 'true'
+      
+    healthcheck:
+      test: ["CMD-SHELL","curl -f http://localhost:8080/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    # do NOT override the command here; let the image CMD run the init script
+    # either remove the command to use the image default, or point it to the correct path:
+    # command: ["/opt/jboss/wildfly/bin/laurentius-demo.sh","--init","-d","court-laurentius.si"]
+
+volumes:
+  laurentius-data:
+  laurentius-logs:

@@ -1,0 +1,6 @@
+# Ensure shell scripts are checked out with LF line endings on all platforms
+*.sh text eol=lf
+
+# Optional: enforce common text files as LF too
+*.conf text eol=lf
+*.xml text eol=lf

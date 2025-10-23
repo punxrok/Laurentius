@@ -12,3 +12,4 @@ mvn install:install-file $COMM_PROP -DartifactId=Laurentius-msh-xsd  -Dfile=../L
 mvn install:install-file $COMM_PROP -DartifactId=Laurentius-wsdl -Dfile=../Laurentius-libs/Laurentius-wsdl/target/Laurentius-wsdl-$VERSION.jar
 mvn install:install-file $COMM_PROP -DartifactId=Laurentius-lce -Dfile=../Laurentius-libs/Laurentius-lce/target/Laurentius-lce-$VERSION.jar
 
+

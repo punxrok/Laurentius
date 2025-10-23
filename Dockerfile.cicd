@@ -1,27 +1,31 @@
 FROM maven:3.8.6-openjdk-8 as build
 
 WORKDIR /app
-
-# move the project over
 COPY . .
 
-# build
-RUN mvn install
+# Build non-interactively and skip tests for local image builds
+RUN mvn -B -DskipTests install
 
-FROM digicssi/wildfly:10.0.0.Final as package
+FROM jboss/wildfly:11.0.0.Final as package
 
-ENV VERSION 2.0
+ENV VERSION 2.3.2
 ENV SERVER_VERSION wildfly-11.0
-ENV WILDFLY_HOME /opt/wildfly
+# Use the actual WildFly installation path used by the base image
+ENV WILDFLY_HOME /opt/jboss/wildfly
 
-
-# si.laurentius module libralies
+# copy module jars into the actual WildFly modules dir
 COPY --from=build /app/Laurentius-libs/Laurentius-msh-xsd/target/Laurentius-msh-xsd-$VERSION.jar $WILDFLY_HOME/modules/si/laurentius/main/
 COPY --from=build /app/Laurentius-libs/Laurentius-wsdl/target/Laurentius-wsdl-$VERSION.jar $WILDFLY_HOME/modules/si/laurentius/main/
 COPY --from=build /app/Laurentius-libs/Laurentius-commons/target/Laurentius-commons-$VERSION.jar $WILDFLY_HOME/modules/si/laurentius/main/
 COPY --from=build /app/Laurentius-libs/Laurentius-lce/target/Laurentius-lce-$VERSION.jar $WILDFLY_HOME/modules/si/laurentius/main/
 COPY --from=build /app/Laurentius-libs/Laurentius-plugin-interfaces/target/Laurentius-plugin-interfaces-$VERSION.jar $WILDFLY_HOME/modules/si/laurentius/main/
-# set module
+
+# Add Bouncy Castle jars required by the module (download from Maven Central)
+ADD https://repo1.maven.org/maven2/org/bouncycastle/bcprov-jdk18on/1.75/bcprov-jdk18on-1.75.jar $WILDFLY_HOME/modules/si/laurentius/main/
+ADD https://repo1.maven.org/maven2/org/bouncycastle/bcpkix-jdk18on/1.75/bcpkix-jdk18on-1.75.jar $WILDFLY_HOME/modules/si/laurentius/main/
+ADD https://repo1.maven.org/maven2/org/bouncycastle/bcutil-jdk18on/1.75/bcutil-jdk18on-1.75.jar $WILDFLY_HOME/modules/si/laurentius/main/
+
+# set module file
 COPY --from=build /app/scripts/install/$SERVER_VERSION/modules/si.laurentius.module.xml $WILDFLY_HOME/modules/si/laurentius/main/module.xml
 
 # copy modules
@@ -33,29 +37,50 @@ COPY --from=build /app/scripts/install/$SERVER_VERSION/config/laurentius-users.p
 COPY --from=build /app/scripts/install/$SERVER_VERSION/config/standalone-laurentius.xml $WILDFLY_HOME/standalone/configuration/
 COPY --from=build /app/scripts/install/$SERVER_VERSION/config/test-tls-keystore.jks $WILDFLY_HOME/standalone/configuration/
 
-
-
-# application modules
+# application modules & deployments
 COPY --from=build /app/Laurentius-dao/target/Laurentius-dao.jar $WILDFLY_HOME/standalone/deployments/
 COPY --from=build /app/Laurentius-msh/Laurentius-msh-ear/target/Laurentius-msh.ear $WILDFLY_HOME/standalone/deployments/
 COPY --from=build /app/Laurentius-app/Laurentius-ws/target/laurentius-ws.war $WILDFLY_HOME/standalone/deployments/
 COPY --from=build /app/Laurentius-app/Laurentius-web/target/laurentius-web.war $WILDFLY_HOME/standalone/deployments/
-# application plugins
+
+# plugins & laurentius home
 COPY --from=build /app/Laurentius-plugins/Laurentius-zpp-plugin/target/plugin-zpp.war $WILDFLY_HOME/standalone/deployments/
 COPY --from=build /app/Laurentius-plugins/Laurentius-basic-plugin/target/plugin-basic.war $WILDFLY_HOME/standalone/deployments/
 COPY --from=build /app/Laurentius-plugins/Laurentius-test-case-plugin/target/plugin-testcase.war $WILDFLY_HOME/standalone/deployments/
 COPY --from=build /app/Laurentius-examples/example-web-plugin/target/example-web-plugin.war $WILDFLY_HOME/standalone/deployments/
-# copy laurentius home
 COPY --from=build /app/scripts/install/laurentius-home/  $WILDFLY_HOME/standalone/data/laurentius-home/
 
-COPY --from=build /app/scripts/install/$SERVER_VERSION/laurentius-demo.sh  $WILDFLY_HOME/bin/
+# copy scripts to the real WildFly bin dir
+COPY --from=build /app/scripts/install/$SERVER_VERSION/laurentius-init.sh  $WILDFLY_HOME/bin/laurentius-demo.sh
+COPY --from=build /app/scripts/install/$SERVER_VERSION/laurentius.sh       $WILDFLY_HOME/bin/laurentius.sh
 
+USER root
+# safety: remove BOM, strip CRLF, ensure +x, normalize module.xml, replace VERSION token, and set ownership so jboss can read module jars
+RUN set -eux; \
+    # normalize shell scripts: remove BOM if present, strip CRLF, ensure executable
+    for f in $WILDFLY_HOME/bin/*.sh; do \
+      if [ -f "$f" ]; then \
+        awk 'NR==1{sub(/^\xef\xbb\xbf/,"")}1' "$f" > "$f.tmp" && mv "$f.tmp" "$f" || true; \
+        sed -i 's/\r$//' "$f" || true; \
+        chmod +x "$f" || true; \
+      fi; \
+    done; \
+    # normalize module.xml: remove BOM, strip CR, replace VERSION
+    if [ -f "$WILDFLY_HOME/modules/si/laurentius/main/module.xml" ]; then \
+      awk 'NR==1{sub(/^\xef\xbb\xbf/,"")}1' "$WILDFLY_HOME/modules/si/laurentius/main/module.xml" > "$WILDFLY_HOME/modules/si/laurentius/main/module.xml.tmp" || true; \
+      mv "$WILDFLY_HOME/modules/si/laurentius/main/module.xml.tmp" "$WILDFLY_HOME/modules/si/laurentius/main/module.xml" 2>/dev/null || true; \
+      sed -i 's/\r$//' "$WILDFLY_HOME/modules/si/laurentius/main/module.xml" || true; \
+      sed -i -- "s/VERSION/$VERSION/g" "$WILDFLY_HOME/modules/si/laurentius/main/module.xml" || true; \
+    fi; \
+    # set ownership and perms so jboss user can read module jars and module.xml
+    if [ -d "$WILDFLY_HOME/modules/si/laurentius/main" ]; then \
+      chown -R jboss:jboss "$WILDFLY_HOME/modules/si/laurentius/main" || true; \
+      chmod -R a+r "$WILDFLY_HOME/modules/si/laurentius/main" || true; \
+    fi; \
+    # set ownership for standalone data dir as well
+    chown -R jboss:jboss $WILDFLY_HOME/standalone/data || true; \
+    true
 
-user root
-RUN  cd $WILDFLY_HOME/modules/si/laurentius/main/ \
-    && sed -i -- "s/VERSION/$VERSION/g" "module.xml"   \
-    && chown -R jboss:jboss $WILDFLY_HOME/standalone/data
-user jboss
+USER jboss
 
-# Set the default command to run on boot
-CMD ["/opt/wildfly/bin/laurentius-demo.sh", "--init", "-d", "test-laurentius.si"]
+CMD ["/opt/jboss/wildfly/bin/laurentius-demo.sh","--init","-d","court-laurentius.si"]

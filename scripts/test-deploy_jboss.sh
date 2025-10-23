@@ -20,3 +20,4 @@ cd "../../$WILDFLY_HOME/bin"
 
 ./laurentius-init.sh --init -d mb-laurentius.si
 
+

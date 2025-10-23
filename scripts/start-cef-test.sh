@@ -18,3 +18,4 @@ cd "../../$WILDFLY_HOME/bin"
 
 ./laurentius-demo.sh --init -d mb-laurentius.si
 
+
