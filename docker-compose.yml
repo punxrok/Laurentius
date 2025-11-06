@@ -17,7 +17,7 @@ services:
       - laurentius-data:/opt/jboss/wildfly/standalone/data/laurentius-home
       - laurentius-logs:/opt/jboss/wildfly/standalone/log
     environment:
-      LAU_DOMAIN: 'court-laurentius.si'
+      LAU_DOMAIN: 'mb-laurentius.si'
       LAU_AUTO_ACCEPT: 'true'
       LAU_AUTO_INIT: 'true'
 

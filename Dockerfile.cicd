@@ -49,6 +49,8 @@ COPY --from=build /app/Laurentius-plugins/Laurentius-basic-plugin/target/plugin-
 COPY --from=build /app/Laurentius-plugins/Laurentius-test-case-plugin/target/plugin-testcase.war $WILDFLY_HOME/standalone/deployments/
 COPY --from=build /app/Laurentius-examples/example-web-plugin/target/example-web-plugin.war $WILDFLY_HOME/standalone/deployments/
 COPY --from=build /app/scripts/install/laurentius-home/  $WILDFLY_HOME/standalone/data/laurentius-home/
+# keep an immutable seed copy outside the data volume so first-run init can populate empty mounts
+COPY --from=build /app/scripts/install/laurentius-home/  $WILDFLY_HOME/laurentius-home-template/
 
 # copy scripts to the real WildFly bin dir
 COPY --from=build /app/scripts/install/$SERVER_VERSION/laurentius-init.sh  $WILDFLY_HOME/bin/laurentius-demo.sh
@@ -92,9 +94,8 @@ RUN set -eux; \
 # ensure entrypoint script is executable if it was added
 USER root
 RUN if [ -f "$WILDFLY_HOME/bin/laurentius-entrypoint.sh" ]; then chmod +x "$WILDFLY_HOME/bin/laurentius-entrypoint.sh" || true; fi
-USER jboss
 
-# Use entrypoint wrapper if present, otherwise fall back to laurentius-demo.sh
+# Use entrypoint wrapper; it will drop privileges to jboss before starting WildFly
 ENTRYPOINT ["/opt/jboss/wildfly/bin/laurentius-entrypoint.sh"]
 CMD ["-d","court-laurentius.si"]
 # If you prefer the old behavior (explicit --init by default), use:

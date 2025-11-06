@@ -220,15 +220,50 @@ docker run --rm \
 
 ## Back up and restore volumes
 
+### PowerShell (Windows) commands
+
+1. Back up the current working instance (creates `laurentius-data-backup.tgz` / `laurentius-logs-backup.tgz` in the repo root):
+  ```powershell
+  cd c:\Repos\Laurentius
+  docker compose down
+  docker run --rm -v laurentius-data:/data -v ${PWD}:/backup busybox tar czf /backup/laurentius-data-backup.tgz -C /data .
+  docker run --rm -v laurentius-logs:/data -v ${PWD}:/backup busybox tar czf /backup/laurentius-logs-backup.tgz -C /data .
+  ```
+
+2. Restore from that backup later:
+  ```powershell
+  cd c:\Repos\Laurentius
+  docker compose down
+  docker volume rm laurentius-data laurentius-logs
+  docker volume create laurentius-data
+  docker run --rm -v laurentius-data:/data -v ${PWD}:/backup busybox sh -c "cd /data && tar xzf /backup/laurentius-data-backup.tgz"
+  docker volume create laurentius-logs
+  docker run --rm -v laurentius-logs:/data -v ${PWD}:/backup busybox sh -c "cd /data && tar xzf /backup/laurentius-logs-backup.tgz"
+  docker compose up -d laurentius
+  ```
+
+3. Test a clean auto-initialized install (drops the volumes, rebuilds, and starts fresh):
+  ```powershell
+  cd c:\Repos\Laurentius
+  docker compose down
+  docker compose build laurentius
+  docker volume rm laurentius-data laurentius-logs
+  docker compose up -d laurentius
+  docker logs -f laurentius
+  ```
+  The logs should print `Initialization complete` exactly once. On subsequent restarts, the entrypoint sees the `.initialized` marker in `laurentius-data` and skips the init phase.
+
+### Generic Linux/macOS commands
+
 - Back up:
-```bash
-docker run --rm -v laurentius-data:/data -v "$(pwd)":/backup alpine sh -c "tar -C /data -cf /backup/laurentius-data.tar ."
-```
+  ```bash
+  docker run --rm -v laurentius-data:/data -v "$(pwd)":/backup alpine sh -c "tar -C /data -cf /backup/laurentius-data.tar ."
+  ```
 
 - Restore:
-```bash
-docker run --rm -v laurentius-data:/data -v "$(pwd)":/backup alpine sh -c "tar -C /data -xf /backup/laurentius-data.tar"
-```
+  ```bash
+  docker run --rm -v laurentius-data:/data -v "$(pwd)":/backup alpine sh -c "tar -C /data -xf /backup/laurentius-data.tar"
+  ```
 
 ---
 
@@ -259,4 +294,121 @@ git push origin develop
 
 ---
 
-If you want, I can commit this README to the `develop` branch for you (prepare the commit and push). Would you like me to produce the exact git commands to add and push the README now?
+
+
+REAL DEAL manual intervention that works:
+
+docker run --rm --entrypoint /bin/sh --user 0 -v laurentius-data:/seed laurentius:develop -c "mkdir -p /seed && cp -a /opt/jboss/wildfly/standalone/data/laurentius-home/. /seed/"
+
+
+1. Start the debug container.
+````powershell
+docker run -d --name laurentius-debug --entrypoint /bin/sh `
+  -p 8080:8080 -p 8443:8443 -p 9990:9990 `
+  -v laurentius-data:/opt/jboss/wildfly/standalone/data/laurentius-home `
+  -v laurentius-logs:/opt/jboss/wildfly/standalone/log `
+  laurentius:develop -c "sleep infinity"
+````
+
+2. Enter the container and run the init.
+````powershell
+docker exec -it laurentius-debug /bin/sh
+/opt/jboss/wildfly/bin/laurentius-demo.sh --init -d mb-laurentius.si
+
+touch /opt/jboss/wildfly/standalone/data/laurentius-home/.initialized
+#then (still in the container as root)
+chown jboss:jboss /opt/jboss/wildfly/standalone/data/laurentius-home/.initialized
+
+
+exit # remove the debug container, and start the normal service. The entrypoint will find the marker and skip reinitialisation.
+````
+
+STOP HERE!
+3. Remove the debug container.
+````powershell
+docker rm -f laurentius-debug
+````
+
+4. Start the service normally.
+````powershell
+docker compose up -d laurentius
+````
+
+
+
+Completed (1/3) *Verify manual init steps*
+
+Nice — below are the exact PowerShell-ready commands for running the manual init and creating the `.initialized` marker as root, with a couple of safe alternatives if the debug container was started as non-root or already removed.
+
+Pick the flow you need.
+
+1) Start the debug container as root (recommended — you’ll be able to run init and create the marker without extra exec flags)
+```powershell
+docker run -d --name laurentius-debug --entrypoint /bin/sh --user 0 `
+  -p 8080:8080 -p 8443:8443 -p 9990:9990 `
+  -v laurentius-data:/opt/jboss/wildfly/standalone/data/laurentius-home `
+  -v laurentius-logs:/opt/jboss/wildfly/standalone/log `
+  laurentius:develop -c "sleep infinity"
+```
+
+2) Exec into the debug container as root and run the init
+```powershell
+# open a root shell in the debug container
+docker exec -it --user 0 laurentius-debug /bin/sh
+
+# inside container (root): run the legacy init
+/opt/jboss/wildfly/bin/laurentius-demo.sh --init -d mb-laurentius.si
+
+# verify success (inside container)
+/bin/sh -c "tail -n 200 /opt/jboss/wildfly/standalone/log/server.log"
+```
+
+3) Still inside as root: create the marker and fix ownership
+```sh
+# create marker
+touch /opt/jboss/wildfly/standalone/data/laurentius-home/.initialized
+
+# set ownership to the jboss user inside container
+chown jboss:jboss /opt/jboss/wildfly/standalone/data/laurentius-home/.initialized
+```
+
+4) Exit, remove debug container and start the normal service
+```powershell
+exit
+docker rm -f laurentius-debug
+docker compose up -d laurentius
+```
+
+If you already started the debug container as non-root (or you started it as jboss), use these alternatives:
+
+A) Exec as root into an existing running container (no need to restart it)
+```powershell
+# run the init as the jboss user if you prefer (no ownership change possible if init writes files as jboss):
+docker exec -it laurentius-debug /bin/sh
+# inside (jboss): run init
+/opt/jboss/wildfly/bin/laurentius-demo.sh --init -d mb-laurentius.si
+
+# then from host, create the marker as root inside the container:
+docker exec --user 0 laurentius-debug sh -c "touch /opt/jboss/wildfly/standalone/data/laurentius-home/.initialized && chown jboss:jboss /opt/jboss/wildfly/standalone/data/laurentius-home/.initialized"
+```
+
+B) If the debug container was removed already (marker missing), create the marker using a short one-shot root container that mounts the same volume:
+```powershell
+docker run --rm --user 0 -v laurentius-data:/opt/jboss/wildfly/standalone/data/laurentius-home laurentius:develop `
+  sh -c "mkdir -p /opt/jboss/wildfly/standalone/data/laurentius-home && touch /opt/jboss/wildfly/standalone/data/laurentius-home/.initialized && chown jboss:jboss /opt/jboss/wildfly/standalone/data/laurentius-home/.initialized"
+```
+
+Verification after bringing the normal service up
+```powershell
+# Follow recent logs (look for absence of init messages or a successful 'Initialization complete' earlier during manual steps)
+docker logs -f --tail 200 laurentius
+
+# Or inspect the marker directly in a one-off root container
+docker run --rm --user 0 -v laurentius-data:/data busybox sh -c "ls -l /data | grep .initialized || true"
+```
+
+Notes and tips
+- Use `--user 0` when you need root privileges inside a container. `docker exec --user 0` is the usual way to run a single command as root in an existing container.
+- Running the init as root is convenient because the script and subsequent touches/chowns succeed. If you run the init as `jboss` user and it writes files, you may still need to fix some ownership as root.
+- The safer approach for automated CI/ops is the one-off init container or the entrypoint automated init — both avoid leaving a debugging container around.
+- If you want, I can add the exact snippet (the recommended root flow plus the exec fallback) into README_docker.md at the manual-init section and commit it for you.
