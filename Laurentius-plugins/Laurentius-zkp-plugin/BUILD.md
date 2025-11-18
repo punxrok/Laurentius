@@ -2,7 +2,19 @@
 
 This document describes how to build the `plugin-zkp.war` file.
 
-## Prerequisites
+## Precompiled WAR File (No Build Required)
+
+**If you don't want to install Java and Maven**, a precompiled WAR file is included in the repository:
+
+```
+dist/plugin-zkp.war
+```
+
+You can use this file directly without building from source.
+
+## Building from Source
+
+### Prerequisites
 
 - **Java 8** or higher (Java 8 recommended)
 - **Maven 3+**

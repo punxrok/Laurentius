@@ -4,14 +4,17 @@
 
 The Laurentius ZKP plugin has been successfully compiled, and the `plugin-zkp.war` file is ready for download.
 
-## Location of WAR File
+## Precompiled WAR File
 
-The compiled WAR file is located at:
+**A precompiled WAR file is included in the repository** for convenience (no Java/Maven installation required):
+
 ```
-Laurentius-plugins/Laurentius-zkp-plugin/target/plugin-zkp.war
+Laurentius-plugins/Laurentius-zkp-plugin/dist/plugin-zkp.war
 ```
 
 **File size:** 18MB
+
+You can download and use this file directly without building from source.
 
 ## What Was Done
 
